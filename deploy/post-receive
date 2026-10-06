@@ -1,0 +1,9 @@
+#!/bin/bash
+# pk-206 の ~/repos/voicelog.git/hooks/post-receive に置く。
+# main が push されたら ~/voicelog に中身を展開する（ログや作業フォルダなど、管理外のファイルは残る）。
+while read old new ref; do
+  if [ "$ref" = "refs/heads/main" ]; then
+    git --work-tree=/home/ikm/voicelog --git-dir=/home/ikm/repos/voicelog.git checkout -f main
+    echo "deployed to ~/voicelog: $(git --git-dir=/home/ikm/repos/voicelog.git log -1 --format='%h %s' main)"
+  fi
+done
