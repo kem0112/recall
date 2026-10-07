@@ -6,8 +6,8 @@
 
   （音声なら Whisper で文字起こし）→ raw に追記 → Codex で仕分け → 種類のノートへ → #recall に結果
 
-毎朝 8:00（RECALL_DIGEST_TIME）: モーニングブリーフ（天気・タスク・昨日のふりかえり等を Codex がまとめる）を送る。
-  `!brief` でいつでも作り直し、`!tasks` で期日の近いタスクだけを出す（! で始まる投稿は記録しない）。
+`!tasks` で期日の近いタスク（今日・期限切れ・明日）を出す（! で始まる投稿は記録しない）。
+モーニングブリーフは Concierge（別 bot, #concierge）に移した。
 
 取り消し:
   - 自分の投稿を Discord で削除する → 記録からも消える
@@ -22,14 +22,13 @@ import os
 import sys
 import tempfile
 import traceback
-from datetime import datetime, timezone, time as dtime
+from datetime import datetime, timezone
 
 import discord
 from discord.ext import tasks
 
 import classify as cl
 from digest import build_digest
-from brief import build_brief
 from nc import (JST, AUDIO_DIR, s as nc_session, url, append_raw, put_bytes, list_dir, mkcol,
                 remove_raw_entry, delete_path, log, log_date)
 from voicelog import INBOX, AUDIO_EXT as INBOX_AUDIO_EXT, recorded_at, archive
@@ -52,8 +51,6 @@ INBOX_POLL_SEC = 30
 INBOX_MIN_AGE_SEC = 15
 FAILED_DIR = "/VoiceLog/failed"   # 文字起こしできなかった音声（同じ失敗を30秒ごとに繰り返さないため退避）
 TRASH_EMOJI = "🗑"
-_h, _m = (os.environ.get("RECALL_DIGEST_TIME", "08:00").split(":") + ["0"])[:2]
-DIGEST_TIME = dtime(hour=int(_h), minute=int(_m), tzinfo=JST)
 
 # 記録と Discord のメッセージの対応（取り消しに使う）。pk-206 上だけに置く
 STATE_PATH = os.path.join(HERE, "state", "entries.json")
@@ -216,15 +213,9 @@ async def handle_command(message):
         text = await asyncio.to_thread(
             build_digest, log_date(datetime.now(JST)), None, True)
         await message.reply(text, mention_author=False)
-    elif cmd == "!brief":
-        await safe_react(message, "⏳")
-        async with _work_lock:
-            text = await asyncio.to_thread(build_brief, log_date(datetime.now(JST)))
-        await message.reply(clip(text, REPLY_LIMIT), mention_author=False)
-        await safe_react(message, "⏳", remove=True)
     else:
-        await message.reply("使えるコマンド: `!brief`（モーニングブリーフ）/ `!tasks`（今日・期限切れ・明日のタスク）",
-                            mention_author=False)
+        await message.reply("使えるコマンド: `!tasks`（今日・期限切れ・明日のタスク）"
+                            "　※モーニングブリーフは #concierge へ移りました", mention_author=False)
 
 
 @client.event
@@ -398,34 +389,11 @@ async def on_raw_reaction_add(payload):
         await _send(f"⚠️ 削除に失敗しました: `{clip(str(e), 300)}`")
 
 
-# ---- 毎朝のモーニングブリーフ ----
-
-@tasks.loop(time=DIGEST_TIME)
-async def morning_digest():
-    try:
-        async with _work_lock:
-            text = await asyncio.to_thread(build_brief, datetime.now(JST).date())
-        await _send(text)
-    except Exception as e:  # noqa: BLE001
-        log(f"NG brief: {e!r}")
-        try:
-            await _send(f"⚠️ モーニングブリーフを作れませんでした: `{clip(str(e), 300)}`")
-        except Exception:  # noqa: BLE001
-            pass
-
-
-@morning_digest.before_loop
-async def before_morning_digest():
-    await client.wait_until_ready()
-
-
 @client.event
 async def on_ready():
-    log(f"Recall bot ready as {client.user} (channel={CHANNEL_ID}, digest={DIGEST_TIME:%H:%M})")
+    log(f"Recall bot ready as {client.user} (channel={CHANNEL_ID})")
     if not poll_inbox.is_running():
         poll_inbox.start()
-    if not morning_digest.is_running():
-        morning_digest.start()
 
 
 if __name__ == "__main__":
