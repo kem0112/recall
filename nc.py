@@ -66,6 +66,14 @@ def put_text(path, text):
     s.put(url(path), data=text.encode("utf-8")).raise_for_status()
 
 
+def put_bytes(path, data):
+    mkcol(path.rsplit("/", 1)[0])
+    s.put(url(path), data=data).raise_for_status()
+
+
+AUDIO_DIR = "/VoiceLog/audio"        # 元の音声（ショートカット経由も Discord 経由もここ）
+
+
 def list_dir(path):
     """[(name, mtime(UTC) or None, is_dir)]。フォルダが無ければ空。"""
     body = ('<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop>'

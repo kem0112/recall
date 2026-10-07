@@ -7,7 +7,7 @@
 ```
 入口①  Discord #recall に投げる（文字 / 音声メッセージ）     → bot.py（常駐, systemd）
 入口②  iPhoneショートカット「Voice log」→ /VoiceLog/Inbox      → voicelog.py（cron 10分おき）
-          │ 音声は Whisper（large-v3-turbo, CPU）で文字起こし
+          │ 音声は Whisper（large-v3-turbo, CPU）で文字起こし。元の音声は /VoiceLog/audio/YYYY-MM/ に保存
           ▼
 /ob/Recall/raw/YYYY-MM-DD.md   その日の全記録（唯一の元データ。🎙️ 音声 / 💬 文字）
           │

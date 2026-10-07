@@ -8,11 +8,10 @@ import re
 import tempfile
 from datetime import datetime, timezone
 
-from nc import s, url, mkcol, log, list_dir, append_raw, JST
+from nc import s, url, mkcol, log, list_dir, append_raw, JST, AUDIO_DIR
 import classify as cl
 
 INBOX = "/VoiceLog/Inbox"
-AUDIO_DIR = "/VoiceLog/audio"
 MIN_AGE_SEC = 120       # 届いてからこの秒数が経ったものだけ処理（アップロード途中を拾わない）
 AUDIO_EXT = (".m4a", ".mp3", ".wav", ".aac", ".caf", ".ogg")
 

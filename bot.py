@@ -14,7 +14,7 @@ import traceback
 import discord
 
 import classify as cl
-from nc import JST, append_raw, log
+from nc import JST, AUDIO_DIR, append_raw, put_bytes, log
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOKEN = os.environ["RECALL_DISCORD_TOKEN"]
@@ -43,11 +43,18 @@ def is_audio(att):
     return ct.startswith("audio/") or att.filename.lower().endswith(AUDIO_EXT)
 
 
-async def transcribe_attachment(att):
-    suffix = os.path.splitext(att.filename)[1] or ".ogg"
+def audio_archive_path(message, att):
+    """ショートカット経由と同じ並び（録音時刻のファイル名）で /VoiceLog/audio/YYYY-MM/ に置く。"""
+    dt = message.created_at.astimezone(JST)
+    suffix = os.path.splitext(att.filename)[1].lower() or ".ogg"
+    return f"{AUDIO_DIR}/{dt:%Y-%m}/{dt:%Y-%m-%d_%H%M%S}_discord{message.id}_{att.id}{suffix}"
+
+
+async def transcribe_bytes(data, suffix):
     with tempfile.TemporaryDirectory() as d:
         path = os.path.join(d, "audio" + suffix)
-        await att.save(path)
+        with open(path, "wb") as f:
+            f.write(data)
         proc = await asyncio.create_subprocess_exec(
             sys.executable, os.path.join(HERE, "transcribe.py"), path,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
@@ -81,7 +88,14 @@ async def handle(message):
         parts.append(message.content.strip())
     for att in message.attachments:
         if is_audio(att):
-            parts.append(await transcribe_attachment(att) or "（音声なし）")
+            data = await att.read()
+            # 元の音声を先に保存する（文字起こしに失敗しても音声は残る。後でやり直せる）
+            try:
+                await asyncio.to_thread(put_bytes, audio_archive_path(message, att), data)
+            except Exception as e:  # noqa: BLE001
+                log(f"NG audio archive discord:{message.id}: {e!r}")
+            suffix = os.path.splitext(att.filename)[1] or ".ogg"
+            parts.append(await transcribe_bytes(data, suffix) or "（音声なし）")
             voice = True
         else:
             others.append(att.filename)
