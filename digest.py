@@ -1,6 +1,6 @@
-"""タスク.md から、期日が近いものを機械的に拾う（Codex は使わない）。
+"""タスクのノートから、期日が近いものを機械的に拾う（Codex は使わない）。
 
-タスク.md と、Concierge の 預かりタスク.md（📧 付き）の両方を見る。
+短期タスク.md・長期タスク.md・開発タスク.md（と以前の タスク.md）、Concierge の 預かりタスク.md（📧 付き）を見る。
 拾う条件は2つだけ:
   - 未完了の行（`- [ ]` で始まる。完了は `- [x]`）
   - 期日 `📅 YYYY-MM-DD` が付いている
@@ -9,7 +9,7 @@ bot が書く行はこの形に決まっているし、Obsidian で手で書き�
 import re
 from datetime import date, timedelta
 
-from classify import TYPE_FILES, WEEKDAYS
+from classify import TYPE_FILES, TASK_TYPES, LEGACY_TASK_FILES, WEEKDAYS
 from nc import get_text
 
 HELD_TASKS_MD = "/ob/Concierge/預かりタスク.md"   # Concierge（別 bot）がメールから預かったタスク
@@ -46,7 +46,8 @@ def open_tasks_with_due(content):
 def build_digest(today, content=None, include_empty=False):
     if content is None:
         # 自分のタスク（Recall）と、Concierge がメールから預かったタスクの両方
-        content = (get_text(TYPE_FILES["タスク"]) or "") + "\n" + (get_text(HELD_TASKS_MD) or "")
+        paths = [TYPE_FILES[t] for t in TASK_TYPES] + LEGACY_TASK_FILES + [HELD_TASKS_MD]
+        content = "\n".join(get_text(p) or "" for p in paths)
     tasks = open_tasks_with_due(content)
     overdue = [(d, t) for d, t in tasks if d < today]
     due_today = [t for d, t in tasks if d == today]

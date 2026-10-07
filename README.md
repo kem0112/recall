@@ -12,7 +12,7 @@
 /ob/Recall/raw/YYYY-MM-DD.md   その日の全記録（唯一の元データ。🎙️ 音声 / 💬 文字）
           │
           ├ すぐに: Codex で仕分け → 種類のノートに1行追記 → #recall に結果（①②とも）
-          │     /ob/Recall/タスク.md  /心を動かされたもの.md  /やりたいこと.md   （その他は raw と日記のみ）
+          │     /ob/Recall/短期タスク.md /長期タスク.md /開発タスク.md /心を動かされたもの.md /所感.md （その他は raw と日記のみ。1件から複数の項目を取り出す）
           │
           └ 毎朝4:15: summarize.py → /ob/Recall/日記/YYYY-MM-DD.md（要約・できごと・気づき・TODO・清書）
 ```
@@ -25,7 +25,7 @@
 
 ## タスクの確認
 
-- `!tasks` と投稿すると、タスク.md の「今日・期限切れ・明日」を出す。`!` で始まる投稿は記録されない
+- `!tasks` と投稿すると、短期・長期・開発タスク（と以前の タスク.md、預かりタスク.md）の「今日・期限切れ・明日」を出す。`!` で始まる投稿は記録されない
 - 拾うのは「未完了 `- [ ]`」かつ「期日 `📅 YYYY-MM-DD`」の行だけ（`digest.py`、Codex は使わない）。
   Obsidian で完了 `- [x]` にすれば出なくなる。手で書き足したタスクも同じ書き方なら拾う
 - 毎朝のモーニングブリーフは **Concierge**（別リポジトリ・別 bot, #concierge）が Recall の記録を読んで作る
@@ -46,7 +46,8 @@
 | voicelog.py | Inbox 処理の定数・関数（bot.py が使う）。bot 停止時の手動用（run.sh） |
 | summarize.py | 日次の日記（`--date YYYY-MM-DD` で作り直し） |
 | classify.py | 1件の仕分けと、種類ノートへの追記 |
-| digest.py | タスク.md から期日の近いタスクを拾う（`!tasks`） |
+| reclassify.py | raw の記録を今の分類でやり直す（`run_reclassify.sh 日付 [ID|--all]`） |
+| digest.py | タスクのノートから期日の近いタスクを拾う（`!tasks`） |
 | nc.py | WebDAV・raw 追記・ロックなどの共通部品 |
 | ai.py | Codex CLI の呼び出し |
 | transcribe.py | Whisper（bot からは別プロセスで呼ぶ。モデルを常駐させないため） |
