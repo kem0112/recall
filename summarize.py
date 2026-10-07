@@ -46,7 +46,7 @@ def summarize(day, force=False):
               .replace("{{DATE}}", day.isoformat())
               .replace("{{GLOSSARY}}", glossary())
               .replace("{{RAW}}", raw))
-    body = run_codex(prompt)
+    body = run_codex(prompt, profile="main", task="recall_journal")
     body = re.sub(r"^```(?:markdown|md)?\s*\n|\n```\s*$", "", body)  # 囲みが付いたら外す
     header = (f"---\ndate: {day.isoformat()}\ntags: [recall, 日記]\n"
               f"entries: {n}\n"

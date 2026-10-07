@@ -61,7 +61,7 @@ def classify(text, dt):
               .replace("{{NOW}}", now_label(dt))
               .replace("{{GLOSSARY}}", glossary())
               .replace("{{TEXT}}", text))
-    return parse_result(run_codex(prompt, timeout=300), text)
+    return parse_result(run_codex(prompt, timeout=300, profile="light", task="recall_classify"), text)
 
 
 def entry_token(entry_id):
