@@ -151,7 +151,7 @@ async def _send(text):
 
 async def classify_and_record(text, dt, day, entry_id):
     try:
-        result = await asyncio.to_thread(cl.classify, text)
+        result = await asyncio.to_thread(cl.classify, text, dt)
         await asyncio.to_thread(cl.record, result, dt, day, entry_id)
         return cl.describe(result)
     except Exception as e:  # noqa: BLE001

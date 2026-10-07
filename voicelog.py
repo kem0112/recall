@@ -66,7 +66,7 @@ def main():
             continue
         if new and text:
             try:
-                result = cl.classify(text)
+                result = cl.classify(text, dt)
                 cl.record(result, dt, day, name)
                 log(f"  → {result['type']}: {result['title']}")
             except Exception as e:  # noqa: BLE001

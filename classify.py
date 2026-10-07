@@ -5,6 +5,7 @@
 """
 import json
 import re
+from datetime import date
 
 from ai import run_codex, load_prompt, glossary
 from nc import OB_ROOT, append_line, remove_lines_containing
@@ -12,6 +13,21 @@ from nc import OB_ROOT, append_line, remove_lines_containing
 TYPES = ["タスク", "心を動かされたもの", "やりたいこと", "その他"]
 TYPE_FILES = {t: f"{OB_ROOT}/{t}.md" for t in TYPES if t != "その他"}
 TYPE_ICON = {"タスク": "✅", "心を動かされたもの": "✨", "やりたいこと": "🌱", "その他": "📓"}
+WEEKDAYS = "月火水木金土日"
+
+
+def now_label(dt):
+    """Codex に渡す「いつ投げたか」。相対的な日付（明日・来週）を解決する基準になる。"""
+    return f"{dt:%Y-%m-%d}（{WEEKDAYS[dt.weekday()]}）{dt:%H:%M}"
+
+
+def parse_due(value):
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip()):
+        return None
+    try:
+        return date.fromisoformat(value.strip()).isoformat()
+    except ValueError:
+        return None
 
 
 def parse_result(out, text):
@@ -36,11 +52,13 @@ def parse_result(out, text):
         t = re.sub(r"[#\[\]()]", "", t)
         if t and not t.isdigit() and t not in tags:
             tags.append(t)
-    return {"type": typ, "title": title, "summary": summary, "tags": tags[:5]}
+    return {"type": typ, "title": title, "summary": summary, "tags": tags[:5],
+            "due": parse_due(data.get("due"))}
 
 
-def classify(text):
+def classify(text, dt):
     prompt = (load_prompt("classify.md")
+              .replace("{{NOW}}", now_label(dt))
               .replace("{{GLOSSARY}}", glossary())
               .replace("{{TEXT}}", text))
     return parse_result(run_codex(prompt, timeout=300), text)
@@ -56,6 +74,9 @@ def format_line(result, dt, day, entry_id):
     tags = " ".join("#" + t for t in result["tags"])
     if result["type"] == "タスク":
         body = f"- [ ] {result['title']}"
+        if result.get("due"):
+            # Obsidian の Tasks プラグインの期日の書き方（プラグインが無くてもただの文字として読める）
+            body += f" 📅 {result['due']}"
     else:
         body = f"- **{result['title']}**"
         if result["summary"]:
@@ -78,4 +99,8 @@ def unrecord(entry_id):
 
 def describe(result):
     tags = " ".join("#" + t for t in result["tags"])
-    return f"{TYPE_ICON[result['type']]} **{result['type']}**：{result['title']} {tags}".strip()
+    due = ""
+    if result.get("due"):
+        d = date.fromisoformat(result["due"])
+        due = f" 📅 {d:%m/%d}（{WEEKDAYS[d.weekday()]}）"
+    return f"{TYPE_ICON[result['type']]} **{result['type']}**：{result['title']}{due} {tags}".strip()
