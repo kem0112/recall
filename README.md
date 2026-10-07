@@ -1,50 +1,60 @@
-# voicelog
+# Recall
 
-iPhoneで録った音声メモを、pk-206で自動で文字起こし・要約して、Obsidian（ob）に入れる仕組み。
+思いついたこと・その日のことを、文字でも声でも投げておけば、pk-206 が記録・仕分け・日記化して Obsidian（ob）に入れる仕組み。
 
-## 全体の流れ
+## 流れ
 
 ```
-iPhone ショートカット「Voice log」（録音 or 共有シート）
-  → WebDAV直送（Nextcloudのファイルリクエスト共有）→ /VoiceLog/Inbox/YYYY-MM-DD_HHMMSS.m4a
-  → [10分おき] run.sh → voicelog.py（faster-whisper large-v3-turbo）
-      ├ /ob/ボイスログ/raw/YYYY-MM-DD.md に時刻見出し付きで追記
-      └ 音声を /VoiceLog/audio/YYYY-MM/ へ移動
-  → [毎朝4:15] run_summary.sh → summarize.py（Codex CLI, read-only）
-      └ /ob/ボイスログ/YYYY-MM-DD.md（要約・できごと・気づき・TODO・清書）
+入口①  Discord #recall に投げる（文字 / 音声メッセージ）     → bot.py（常駐, systemd）
+入口②  iPhoneショートカット「Voice log」→ /VoiceLog/Inbox      → voicelog.py（cron 10分おき）
+          │ 音声は Whisper（large-v3-turbo, CPU）で文字起こし
+          ▼
+/ob/Recall/raw/YYYY-MM-DD.md   その日の全記録（唯一の元データ。🎙️ 音声 / 💬 文字）
+          │
+          ├ すぐに: Codex で仕分け → 種類のノートに1行追記（bot は Discord に結果を返信）
+          │     /ob/Recall/タスク.md  /心を動かされたもの.md  /やりたいこと.md   （その他は raw と日記のみ）
+          │
+          └ 毎朝4:15: summarize.py → /ob/Recall/日記/YYYY-MM-DD.md（要約・できごと・気づき・TODO・清書）
 ```
 
-- 日付の区切りは朝4時（`DAY_START_HOUR`）。深夜の録音は前日扱い。
-- Nextcloudへの読み書きはすべてWebDAV経由（直接ファイルを置くとNextcloudのDBに載らず同期されないため）。
-- Codexには資格情報を渡さない。rawをテキストで渡し、返ってきた要約をPython側が書き込む。
+- 日付の区切りは朝4時（`nc.py` の `DAY_START_HOUR`）。
+- 種類は4つ固定、タグは AI が自由に付ける。運用しながらタグを見直す。raw が元データなので、後から全件仕分け直せる。
+- Nextcloud への読み書きはすべて WebDAV。同じ md への同時書き込みは `/tmp/recall-ob.lock` で直列化。
+- Codex は読み取り専用・空フォルダで動かし、資格情報もファイルも渡さない。返ってきたテキストを Python が書く。
+- 照明・鍵の bot（home-control）とは別アプリ・別プロセス。Recall が落ちても家の制御には影響しない。
 
 ## ファイル
 
 | ファイル | 役割 |
 |---|---|
-| voicelog.py | Inbox監視 → 文字起こし → raw追記 → 音声アーカイブ |
-| summarize.py | 終わった日のrawを要約（`--date YYYY-MM-DD` で強制実行） |
-| prompt.md | Codexへの指示文（出力フォーマット） |
-| glossary.txt | 誤変換を直すための用語集。よく話す単語を足していく |
-| run.sh / run_summary.sh | cronから呼ぶ起動スクリプト（env読み込み・二重起動防止） |
-| crontab.txt | pk-206に登録しているcronの控え |
-| deploy/post-receive | push時に ~/voicelog へ展開するgitフック |
-| tools/test_whisper.py | モデル比較用 |
+| bot.py | Discord の入口。投稿 → raw → 仕分け → 返信 |
+| voicelog.py | ショートカット経由の音声（Inbox）の処理 |
+| summarize.py | 日次の日記（`--date YYYY-MM-DD` で作り直し） |
+| classify.py | 1件の仕分けと、種類ノートへの追記 |
+| nc.py | WebDAV・raw 追記・ロックなどの共通部品 |
+| ai.py | Codex CLI の呼び出し |
+| transcribe.py | Whisper（bot からは別プロセスで呼ぶ。モデルを常駐させないため） |
+| prompts/ | classify.md（仕分け）, summary.md（日記）, glossary.txt（用語集） |
+| run*.sh | cron / systemd からの起動（env と nvm を読み込む） |
+| deploy/ | post-receive フック、systemd ユニット |
+| crontab.txt / env.example | pk-206 側の設定の控え |
 
 ## pk-206 側（リポジトリ外）
 
-- `~/.config/voicelog/env`（600）: `NC_USER` / `NC_PASS`（Nextcloudアプリパスワード `pk-206-voicelog`）
-- `~/whisper-env/`: faster-whisper, requests の venv
-- `~/.nvm/`: Node LTS + `@openai/codex`（`codex login --device-auth` でChatGPTログイン済み）
-- `~/voicelog/voicelog.log`: 実行ログ
+- `~/.config/recall/env`（600）: `env.example` 参照
+- `~/whisper-env/`: faster-whisper, requests, discord.py の venv
+- `~/.nvm/` + `@openai/codex`（`codex login --device-auth` 済み）
+- `~/recall/recall.log`: cron のログ / bot のログは `journalctl --user -u recall-bot -f`
 
 ## 更新のしかた
 
-Macの `~/voicelog` で編集 → commit → `git push pk main`。
-pk-206の post-receive フックが `~/voicelog` に自動で展開する。pk-206上では直接編集しない。
+Mac の `~/dev/recall` で編集 → commit → `git push`（push 先 `pk` = `pk-206:repos/recall.git`）。
+フックが `~/recall` に展開し、bot を再起動する。pk-206 上では直接編集しない。
 
 ## 今後
 
-- 共有シート経由のファイルは送信時刻がファイル名になる → m4a埋め込みの録音日時（creation_time）を優先する
-- Codexを専用Linuxユーザーで動かして読み取り範囲も隔離する
-- Discordからの会話窓口
+- タグの見直し（1週間運用後）
+- 画像・URL の中身を読む（今はファイル名・URL文字列のみ記録）
+- 仕分けの訂正（Discord で返信して種類を変える）
+- 共有シート経由の音声は送信時刻がファイル名になる → m4a 埋め込みの録音日時を優先
+- Codex を専用 Linux ユーザーで動かす

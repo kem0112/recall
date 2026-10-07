@@ -1,0 +1,71 @@
+"""1件のメモを Codex で仕分けして、種類ごとのノートに1行追記する。
+
+種類は4つ固定（タスク / 心を動かされたもの / やりたいこと / その他）。タグはAIが自由に付ける。
+1週間ほど運用してタグを見直す前提。元データは raw にあるので、後から全件やり直せる。
+"""
+import json
+import re
+
+from ai import run_codex, load_prompt, glossary
+from nc import OB_ROOT, append_line
+
+TYPES = ["タスク", "心を動かされたもの", "やりたいこと", "その他"]
+TYPE_FILES = {t: f"{OB_ROOT}/{t}.md" for t in TYPES if t != "その他"}
+TYPE_ICON = {"タスク": "✅", "心を動かされたもの": "✨", "やりたいこと": "🌱", "その他": "📓"}
+
+
+def parse_result(out, text):
+    """Codex の返事から JSON を取り出して整える。壊れていても落とさず「その他」にする。"""
+    data = {}
+    m = re.search(r"\{.*\}", out, re.S)
+    if m:
+        try:
+            data = json.loads(m.group(0))
+        except ValueError:
+            data = {}
+    if not isinstance(data, dict):
+        data = {}
+    typ = data.get("type") if data.get("type") in TYPES else "その他"
+    first_line = text.strip().splitlines()[0] if text.strip() else "（無題）"
+    title = str(data.get("title") or first_line)[:40].replace("\n", " ").strip()
+    summary = str(data.get("summary") or "").replace("\n", " ").strip()
+    tags = []
+    raw_tags = data.get("tags") if isinstance(data.get("tags"), list) else []
+    for t in raw_tags:
+        t = re.sub(r"\s+", "_", str(t).strip().lstrip("#"))
+        t = re.sub(r"[#\[\]()]", "", t)
+        if t and not t.isdigit() and t not in tags:
+            tags.append(t)
+    return {"type": typ, "title": title, "summary": summary, "tags": tags[:5]}
+
+
+def classify(text):
+    prompt = (load_prompt("classify.md")
+              .replace("{{GLOSSARY}}", glossary())
+              .replace("{{TEXT}}", text))
+    return parse_result(run_codex(prompt, timeout=300), text)
+
+
+def format_line(result, dt, day):
+    link = f"[[Recall/raw/{day.isoformat()}|{dt:%m/%d %H:%M}]]"
+    tags = " ".join("#" + t for t in result["tags"])
+    if result["type"] == "タスク":
+        body = f"- [ ] {result['title']}"
+    else:
+        body = f"- **{result['title']}**"
+        if result["summary"]:
+            body += f" — {result['summary']}"
+    return " ".join(x for x in [body, tags, f"（{link}）"] if x)
+
+
+def record(result, dt, day):
+    """種類のノートに追記する。「その他」は raw と日記だけに残す。"""
+    typ = result["type"]
+    if typ == "その他":
+        return
+    append_line(TYPE_FILES[typ], f"# {typ}\n\n", format_line(result, dt, day))
+
+
+def describe(result):
+    tags = " ".join("#" + t for t in result["tags"])
+    return f"{TYPE_ICON[result['type']]} **{result['type']}**：{result['title']} {tags}".strip()

@@ -1,9 +1,12 @@
 #!/bin/bash
-# pk-206 の ~/repos/voicelog.git/hooks/post-receive に置く。
-# main が push されたら ~/voicelog に中身を展開する（ログや作業フォルダなど、管理外のファイルは残る）。
+# pk-206 の ~/repos/recall.git/hooks/post-receive に置く。
+# main が push されたら ~/recall に展開し、bot を再起動する（ログや作業フォルダなど管理外のファイルは残る）。
 while read old new ref; do
   if [ "$ref" = "refs/heads/main" ]; then
-    git --work-tree=/home/ikm/voicelog --git-dir=/home/ikm/repos/voicelog.git checkout -f main
-    echo "deployed to ~/voicelog: $(git --git-dir=/home/ikm/repos/voicelog.git log -1 --format='%h %s' main)"
+    git --work-tree=/home/ikm/recall --git-dir=/home/ikm/repos/recall.git checkout -f main
+    echo "deployed to ~/recall: $(git --git-dir=/home/ikm/repos/recall.git log -1 --format='%h %s' main)"
+    if systemctl --user try-restart recall-bot 2>/dev/null; then
+      echo "recall-bot restarted"
+    fi
   fi
 done

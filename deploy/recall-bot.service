@@ -1,0 +1,13 @@
+# ~/.config/systemd/user/recall-bot.service に置く（systemctl --user で管理）
+[Unit]
+Description=Recall Discord bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/home/ikm/recall/run_bot.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

@@ -3,4 +3,6 @@ codex-work/
 *.log
 out_*.txt
 *.m4a
+*.ogg
 .DS_Store
+env
