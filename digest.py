@@ -1,5 +1,6 @@
 """タスク.md から、期日が近いものを機械的に拾う（Codex は使わない）。
 
+タスク.md と、Concierge の 預かりタスク.md（📧 付き）の両方を見る。
 拾う条件は2つだけ:
   - 未完了の行（`- [ ]` で始まる。完了は `- [x]`）
   - 期日 `📅 YYYY-MM-DD` が付いている
@@ -11,6 +12,7 @@ from datetime import date, timedelta
 from classify import TYPE_FILES, WEEKDAYS
 from nc import get_text
 
+HELD_TASKS_MD = "/ob/Concierge/預かりタスク.md"   # Concierge（別 bot）がメールから預かったタスク
 TASK_RE = re.compile(r"^\s*- \[ \] (.*)$")
 DUE_RE = re.compile(r"📅\s*(\d{4}-\d{2}-\d{2})")
 
@@ -20,6 +22,7 @@ def clean(body):
     body = DUE_RE.sub("", body)
     body = re.sub(r"（\[\[[^\]]*\]\]）", "", body)
     body = re.sub(r"%%[^%]*%%", "", body)
+    body = re.sub(r"（📧 ([^：）]*)：[^）]*）", r"（📧 \1）", body)
     return re.sub(r"\s+", " ", body).strip()
 
 
@@ -42,7 +45,8 @@ def open_tasks_with_due(content):
 
 def build_digest(today, content=None, include_empty=False):
     if content is None:
-        content = get_text(TYPE_FILES["タスク"])
+        # 自分のタスク（Recall）と、Concierge がメールから預かったタスクの両方
+        content = (get_text(TYPE_FILES["タスク"]) or "") + "\n" + (get_text(HELD_TASKS_MD) or "")
     tasks = open_tasks_with_due(content)
     overdue = [(d, t) for d, t in tasks if d < today]
     due_today = [t for d, t in tasks if d == today]
@@ -55,6 +59,6 @@ def build_digest(today, content=None, include_empty=False):
         lines.append("⚠️ **期日を過ぎたもの**")
         lines += [f"- {t}（{d:%m/%d}）" for d, t in overdue]
     if tomorrow:
-        lines.append("🔜 **明日まで**")
+        lines.append("🔜 **明日が期日**")
         lines += [f"- {t}" for t in tomorrow]
     return "\n".join(lines)
