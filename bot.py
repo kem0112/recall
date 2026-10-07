@@ -6,8 +6,8 @@
 
   （音声なら Whisper で文字起こし）→ raw に追記 → Codex で仕分け → 種類のノートへ → #recall に結果
 
-毎朝 8:00（RECALL_DIGEST_TIME）: タスク.md から「今日・期限切れ・明日」のタスクを #recall に送る。
-  `!tasks` と投稿すれば、いつでも同じものを出す（! で始まる投稿は記録しない）。
+毎朝 8:00（RECALL_DIGEST_TIME）: モーニングブリーフ（天気・タスク・昨日のふりかえり等を Codex がまとめる）を送る。
+  `!brief` でいつでも作り直し、`!tasks` で期日の近いタスクだけを出す（! で始まる投稿は記録しない）。
 
 取り消し:
   - 自分の投稿を Discord で削除する → 記録からも消える
@@ -29,6 +29,7 @@ from discord.ext import tasks
 
 import classify as cl
 from digest import build_digest
+from brief import build_brief
 from nc import (JST, AUDIO_DIR, s as nc_session, url, append_raw, put_bytes, list_dir, mkcol,
                 remove_raw_entry, delete_path, log, log_date)
 from voicelog import INBOX, AUDIO_EXT as INBOX_AUDIO_EXT, recorded_at, archive
@@ -215,8 +216,15 @@ async def handle_command(message):
         text = await asyncio.to_thread(
             build_digest, log_date(datetime.now(JST)), None, True)
         await message.reply(text, mention_author=False)
+    elif cmd == "!brief":
+        await safe_react(message, "⏳")
+        async with _work_lock:
+            text = await asyncio.to_thread(build_brief, log_date(datetime.now(JST)))
+        await message.reply(clip(text, REPLY_LIMIT), mention_author=False)
+        await safe_react(message, "⏳", remove=True)
     else:
-        await message.reply("使えるコマンド: `!tasks`（今日・期限切れ・明日のタスク）", mention_author=False)
+        await message.reply("使えるコマンド: `!brief`（モーニングブリーフ）/ `!tasks`（今日・期限切れ・明日のタスク）",
+                            mention_author=False)
 
 
 @client.event
@@ -390,16 +398,20 @@ async def on_raw_reaction_add(payload):
         await _send(f"⚠️ 削除に失敗しました: `{clip(str(e), 300)}`")
 
 
-# ---- 毎朝のタスク通知 ----
+# ---- 毎朝のモーニングブリーフ ----
 
 @tasks.loop(time=DIGEST_TIME)
 async def morning_digest():
     try:
-        text = await asyncio.to_thread(build_digest, datetime.now(JST).date())
-        if text:  # 該当なしの日は送らない
-            await _send(text)
+        async with _work_lock:
+            text = await asyncio.to_thread(build_brief, datetime.now(JST).date())
+        await _send(text)
     except Exception as e:  # noqa: BLE001
-        log(f"NG digest: {e!r}")
+        log(f"NG brief: {e!r}")
+        try:
+            await _send(f"⚠️ モーニングブリーフを作れませんでした: `{clip(str(e), 300)}`")
+        except Exception:  # noqa: BLE001
+            pass
 
 
 @morning_digest.before_loop
