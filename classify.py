@@ -7,7 +7,7 @@ import json
 import re
 
 from ai import run_codex, load_prompt, glossary
-from nc import OB_ROOT, append_line
+from nc import OB_ROOT, append_line, remove_lines_containing
 
 TYPES = ["タスク", "心を動かされたもの", "やりたいこと", "その他"]
 TYPE_FILES = {t: f"{OB_ROOT}/{t}.md" for t in TYPES if t != "その他"}
@@ -46,7 +46,12 @@ def classify(text):
     return parse_result(run_codex(prompt, timeout=300), text)
 
 
-def format_line(result, dt, day):
+def entry_token(entry_id):
+    # Obsidian のコメント記法。表示されないが、削除のときにこの行を見つける目印になる
+    return f"%%{entry_id}%%"
+
+
+def format_line(result, dt, day, entry_id):
     link = f"[[Recall/raw/{day.isoformat()}|{dt:%m/%d %H:%M}]]"
     tags = " ".join("#" + t for t in result["tags"])
     if result["type"] == "タスク":
@@ -55,15 +60,20 @@ def format_line(result, dt, day):
         body = f"- **{result['title']}**"
         if result["summary"]:
             body += f" — {result['summary']}"
-    return " ".join(x for x in [body, tags, f"（{link}）"] if x)
+    return " ".join(x for x in [body, tags, f"（{link}）", entry_token(entry_id)] if x)
 
 
-def record(result, dt, day):
+def record(result, dt, day, entry_id):
     """種類のノートに追記する。「その他」は raw と日記だけに残す。"""
     typ = result["type"]
     if typ == "その他":
         return
-    append_line(TYPE_FILES[typ], f"# {typ}\n\n", format_line(result, dt, day))
+    append_line(TYPE_FILES[typ], f"# {typ}\n\n", format_line(result, dt, day, entry_id))
+
+
+def unrecord(entry_id):
+    """種類のノートから、その記録の行を消す。"""
+    return sum(remove_lines_containing(path, entry_token(entry_id)) for path in TYPE_FILES.values())
 
 
 def describe(result):

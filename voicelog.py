@@ -67,7 +67,7 @@ def main():
         if new and text:
             try:
                 result = cl.classify(text)
-                cl.record(result, dt, day)
+                cl.record(result, dt, day, name)
                 log(f"  → {result['type']}: {result['title']}")
             except Exception as e:  # noqa: BLE001
                 log(f"  → 仕分け失敗（rawには記録済み）: {e}")

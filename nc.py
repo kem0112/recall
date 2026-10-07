@@ -6,6 +6,7 @@ Recall の各プログラム（bot.py / voicelog.py / summarize.py）はここ�
 import os
 import fcntl
 import contextlib
+import re
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import quote, unquote
@@ -135,3 +136,38 @@ def append_line(path, header, line):
             content += "\n"
         content += line + "\n"
         put_text(path, content)
+
+
+def remove_raw_entry(day, entry_id):
+    """raw から1件（見出し〜次の見出しの手前）を消す。消せたら True。"""
+    path = f"{RAW_DIR}/{day.isoformat()}.md"
+    marker = f"<!-- {entry_id} -->"
+    pat = re.compile(r"\n## [^\n]*\n" + re.escape(marker) + r"\n.*?(?=\n## |\Z)", re.S)
+    with ob_lock():
+        content = get_text(path)
+        if not content or marker not in content:
+            return False
+        new, n = pat.subn("", content, count=1)
+        if n == 0:
+            return False
+        put_text(path, new)
+    return True
+
+
+def remove_lines_containing(path, token):
+    """token を含む行を消す。消した行数を返す。"""
+    with ob_lock():
+        content = get_text(path)
+        if not content or token not in content:
+            return 0
+        lines = content.split("\n")
+        kept = [ln for ln in lines if token not in ln]
+        put_text(path, "\n".join(kept))
+    return len(lines) - len(kept)
+
+
+def delete_path(path):
+    """Nextcloud 上のファイルを消す（Nextcloud のゴミ箱に入るので、しばらくは戻せる）。"""
+    r = s.request("DELETE", url(path))
+    if r.status_code not in (204, 404):
+        r.raise_for_status()

@@ -6,3 +6,4 @@ out_*.txt
 *.ogg
 .DS_Store
 env
+state/
