@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""iPhoneショートカット経由の音声（Nextcloud /VoiceLog/Inbox）を処理する。cron で10分おき。
+"""iPhoneショートカット経由の音声（Nextcloud /VoiceLog/Inbox）を処理する。
+
+普段は常駐 bot（bot.py）が30秒おきに Inbox を見て処理するので、cron では動かしていない。
+bot が止まっているときの手動用（./run.sh）。定数と関数は bot.py からも使う。
 
   Inbox の音声 → Whisper → raw に追記 → 音声を /VoiceLog/audio/YYYY-MM/ へ移動 → Codex で仕分け
 """

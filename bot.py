@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Recall の Discord 窓口。#recall に投げた文字・音声メッセージを記録して仕分ける。
+"""Recall の常駐 bot。2つの入口を受け持ち、結果を #recall に返す。
 
-  投稿 → （音声なら Whisper で文字起こし）→ raw に追記 → Codex で仕分け → 種類のノートへ → 返信
+  ① #recall への投稿（文字・音声メッセージ）: 投稿された瞬間に処理
+  ② iPhoneショートカットの音声（Nextcloud /VoiceLog/Inbox）: 30秒おきに見に行って処理
+
+  （音声なら Whisper で文字起こし）→ raw に追記 → Codex で仕分け → 種類のノートへ → #recall に結果
 
 照明・鍵の bot（home-control の bot.py）とは別アプリ・別プロセス。こちらが落ちても家の制御には影響しない。
 """
@@ -10,11 +13,14 @@ import os
 import sys
 import tempfile
 import traceback
+from datetime import datetime, timezone
 
 import discord
+from discord.ext import tasks
 
 import classify as cl
-from nc import JST, AUDIO_DIR, append_raw, put_bytes, log
+from nc import JST, AUDIO_DIR, s as nc_session, url, append_raw, put_bytes, list_dir, mkcol, log
+from voicelog import INBOX, AUDIO_EXT as INBOX_AUDIO_EXT, recorded_at, archive
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOKEN = os.environ["RECALL_DISCORD_TOKEN"]
@@ -29,6 +35,10 @@ if not ALLOWED_USER_IDS:
 AUDIO_EXT = (".ogg", ".oga", ".opus", ".m4a", ".mp3", ".wav", ".aac", ".caf", ".mp4", ".webm")
 TRANSCRIBE_TIMEOUT = 1800
 REPLY_LIMIT = 1900  # Discord の上限 2000 字に余裕を持たせる
+INBOX_POLL_SEC = 30
+# Nextcloud は書き込み途中を .part にして完了後に名前を変えるので、見えた時点で揃っている。念のため少しだけ待つ
+INBOX_MIN_AGE_SEC = 15
+FAILED_DIR = "/VoiceLog/failed"   # 文字起こしできなかった音声（同じ失敗を30秒ごとに繰り返さないため退避）
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -126,9 +136,86 @@ async def handle(message):
     return clip("\n".join(lines), REPLY_LIMIT)
 
 
+# ---- ② ショートカット経由（Inbox）----
+
+def _download(path):
+    r = nc_session.get(url(path))
+    r.raise_for_status()
+    return r.content
+
+
+def _move_to_failed(name):
+    mkcol(FAILED_DIR)
+    r = nc_session.request("MOVE", url(f"{INBOX}/{name}"),
+                           headers={"Destination": url(f"{FAILED_DIR}/{name}"), "Overwrite": "T"})
+    r.raise_for_status()
+
+
+async def _send(text):
+    channel = client.get_channel(CHANNEL_ID) or await client.fetch_channel(CHANNEL_ID)
+    await channel.send(clip(text, REPLY_LIMIT))
+
+
+async def process_inbox_file(name):
+    dt = recorded_at(name)
+    head = f"🎙️ ショートカット（{dt:%m/%d %H:%M}）"
+    data = await asyncio.to_thread(_download, f"{INBOX}/{name}")
+    if not data:
+        await asyncio.to_thread(_move_to_failed, name)
+        await _send(f"⚠️ {head}: 0バイトのファイルでした（VoiceLog/failed へ移動）")
+        return
+    try:
+        text = await transcribe_bytes(data, os.path.splitext(name)[1] or ".m4a")
+    except Exception as e:  # noqa: BLE001
+        await asyncio.to_thread(_move_to_failed, name)
+        await _send(f"⚠️ {head}: 文字起こしに失敗（VoiceLog/failed へ移動）`{clip(str(e), 200)}`")
+        return
+    day, new = await asyncio.to_thread(append_raw, dt, name, text or "（音声なし）", "voice")
+    await asyncio.to_thread(archive, name, dt)
+    log(f"OK inbox {name}")
+    lines = [head, clip(text or "（音声なし）", 1200)]
+    if new and text:
+        try:
+            result = await asyncio.to_thread(cl.classify, text)
+            await asyncio.to_thread(cl.record, result, dt, day)
+            lines.append(cl.describe(result))
+        except Exception as e:  # noqa: BLE001
+            log(f"NG classify {name}: {e!r}")
+            lines.append(f"📓 記録はしました（仕分けは失敗: `{clip(str(e), 200)}`）")
+    await _send("\n".join(lines))
+
+
+@tasks.loop(seconds=INBOX_POLL_SEC)
+async def poll_inbox():
+    try:
+        items = await asyncio.to_thread(list_dir, INBOX)
+    except Exception as e:  # noqa: BLE001
+        log(f"NG inbox list: {e!r}")
+        return
+    now = datetime.now(timezone.utc)
+    targets = sorted(
+        n for n, mt, is_dir in items
+        if not is_dir and n.lower().endswith(INBOX_AUDIO_EXT)
+        and (mt is None or (now - mt).total_seconds() >= INBOX_MIN_AGE_SEC))
+    for name in targets:
+        async with _work_lock:
+            try:
+                await process_inbox_file(name)
+            except Exception as e:  # noqa: BLE001
+                # 通信エラーなどは Inbox に残したまま、次の回にやり直す
+                log(f"NG inbox {name}: {e!r}\n{traceback.format_exc()}")
+
+
+@poll_inbox.before_loop
+async def before_poll_inbox():
+    await client.wait_until_ready()
+
+
 @client.event
 async def on_ready():
     log(f"Recall bot ready as {client.user} (channel={CHANNEL_ID})")
+    if not poll_inbox.is_running():
+        poll_inbox.start()
 
 
 @client.event

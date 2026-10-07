@@ -1,5 +1,5 @@
 #!/bin/bash
-# cron（10分おき）: ショートカット経由の音声を処理する
+# 手動用: ショートカット経由の音声を処理する（普段は bot.py が30秒おきに処理する）
 set -a
 . /home/ikm/.config/recall/env
 set +a

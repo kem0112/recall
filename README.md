@@ -6,12 +6,12 @@
 
 ```
 入口①  Discord #recall に投げる（文字 / 音声メッセージ）     → bot.py（常駐, systemd）
-入口②  iPhoneショートカット「Voice log」→ /VoiceLog/Inbox      → voicelog.py（cron 10分おき）
+入口②  iPhoneショートカット「Voice log」→ /VoiceLog/Inbox      → bot.py が30秒おきに確認
           │ 音声は Whisper（large-v3-turbo, CPU）で文字起こし。元の音声は /VoiceLog/audio/YYYY-MM/ に保存
           ▼
 /ob/Recall/raw/YYYY-MM-DD.md   その日の全記録（唯一の元データ。🎙️ 音声 / 💬 文字）
           │
-          ├ すぐに: Codex で仕分け → 種類のノートに1行追記（bot は Discord に結果を返信）
+          ├ すぐに: Codex で仕分け → 種類のノートに1行追記 → #recall に結果（①②とも）
           │     /ob/Recall/タスク.md  /心を動かされたもの.md  /やりたいこと.md   （その他は raw と日記のみ）
           │
           └ 毎朝4:15: summarize.py → /ob/Recall/日記/YYYY-MM-DD.md（要約・できごと・気づき・TODO・清書）
@@ -28,7 +28,7 @@
 | ファイル | 役割 |
 |---|---|
 | bot.py | Discord の入口。投稿 → raw → 仕分け → 返信 |
-| voicelog.py | ショートカット経由の音声（Inbox）の処理 |
+| voicelog.py | Inbox 処理の定数・関数（bot.py が使う）。bot 停止時の手動用（run.sh） |
 | summarize.py | 日次の日記（`--date YYYY-MM-DD` で作り直し） |
 | classify.py | 1件の仕分けと、種類ノートへの追記 |
 | nc.py | WebDAV・raw 追記・ロックなどの共通部品 |
@@ -44,7 +44,8 @@
 - `~/.config/recall/env`（600）: `env.example` 参照
 - `~/whisper-env/`: faster-whisper, requests, discord.py の venv
 - `~/.nvm/` + `@openai/codex`（`codex login --device-auth` 済み）
-- `~/recall/recall.log`: cron のログ / bot のログは `journalctl --user -u recall-bot -f`
+- `~/recall/recall.log`: 日記（cron）のログ / bot のログは `journalctl --user -u recall-bot -f`
+- 文字起こしできなかった音声は `/VoiceLog/failed/` に退避される
 
 ## 更新のしかた
 
