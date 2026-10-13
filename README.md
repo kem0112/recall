@@ -68,6 +68,7 @@
 
 Mac の `~/dev/recall` で編集 → commit → `git push`（push 先 `pk` = `pk-206:repos/recall.git`）。
 フックが `~/recall` に展開し、bot を再起動する。pk-206 上では直接編集しない。
+GitHub（控え）へは `git push github main`。
 
 ## 今後
 
