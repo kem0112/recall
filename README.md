@@ -14,10 +14,10 @@
           ├ すぐに: Codex で仕分け → 種類のノートに1行追記 → #recall に結果（①②とも）
           │     /ob/Recall/短期タスク.md /長期タスク.md /開発タスク.md /心を動かされたもの.md /所感.md （その他は raw と日記のみ。1件から複数の項目を取り出す）
           │
-          └ 毎朝4:15: summarize.py → /ob/Recall/日記/YYYY-MM-DD.md（要約・できごと・気づき・TODO・清書）
+          └ 毎朝6:15: summarize.py → /ob/Recall/日記/YYYY-MM-DD.md（要約・できごと・気づき・TODO・清書）
 ```
 
-- 日付の区切りは朝4時（`nc.py` の `DAY_START_HOUR`）。
+- 日付の区切りは朝6時（`nc.py` の `DAY_START_HOUR`。concierge の `nc.py` も同じ値にそろえる）。
 - 種類は4つ固定、タグは AI が自由に付ける。運用しながらタグを見直す。raw が元データなので、後から全件仕分け直せる。
 - Nextcloud への読み書きはすべて WebDAV。同じ md への同時書き込みは `/tmp/recall-ob.lock` で直列化。
 - Codex は読み取り専用・空フォルダで動かし、資格情報もファイルも渡さない。返ってきたテキストを Python が書く。

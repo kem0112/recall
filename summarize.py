@@ -2,7 +2,7 @@
 """日次まとめ: その日の raw を Codex で清書・要約し、/ob/Recall/日記/YYYY-MM-DD.md に書く。
 
 使い方:
-  summarize.py                     終わった日（朝4時区切り）のうち、未要約 or 記録が増えた日を処理
+  summarize.py                     終わった日（朝6時区切り）のうち、未要約 or 記録が増えた日を処理
   summarize.py --date 2026-10-07   指定日を強制的に（作り直して）処理
 """
 import argparse

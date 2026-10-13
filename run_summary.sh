@@ -1,5 +1,5 @@
 #!/bin/bash
-# cron（毎朝4:15）: 終わった日の日記を作る。--date YYYY-MM-DD で手動実行も可
+# cron（毎朝6:15）: 終わった日の日記を作る。--date YYYY-MM-DD で手動実行も可
 set -a
 . /home/ikm/.config/recall/env
 set +a

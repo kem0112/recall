@@ -21,9 +21,9 @@ DAV = f"{NC_BASE}/remote.php/dav/files/{NC_USER}"
 
 OB_ROOT = "/ob/Recall"
 RAW_DIR = f"{OB_ROOT}/raw"          # その日の全記録（唯一の元データ）
-JOURNAL_DIR = f"{OB_ROOT}/日記"      # 朝4時の日次まとめ
+JOURNAL_DIR = f"{OB_ROOT}/日記"      # 朝6時区切りの日次まとめ
 
-DAY_START_HOUR = 4                   # この時刻より前は前日扱い
+DAY_START_HOUR = 6                   # この時刻より前は前日扱い（2026-10-14 に 4→6）
 JST = timezone(timedelta(hours=9))
 LOCK_PATH = "/tmp/recall-ob.lock"
 
