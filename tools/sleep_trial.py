@@ -152,8 +152,9 @@ def load_calendar(lo, hi):
 # ---------- Recall の言葉 ----------
 
 def load_words(lo, hi):
-    """raw の各記録に実際の日時を付ける。ファイルの日付から始め、時刻が戻ったら翌日に進める
-    （1日の区切りは途中で4時→6時に変わったが、この方法ならどちらでも正しい）"""
+    """raw の各記録に実際の日時を付ける。音声は埋め込みのファイル名（YYYY-MM-DD_HHMMSS.m4a）の日時を使う。
+    それ以外は、ファイルの日付から始め、区切り（2026-10-14 から朝6時、それより前は朝4時）より前の時刻なら翌日、
+    途中で時刻が戻ったら翌日に進める"""
     if not RAW_DIRS:
         return None
     out = []
@@ -161,16 +162,20 @@ def load_words(lo, hi):
         day = datetime.fromisoformat(os.path.basename(f)[:10]).date()
         if not (lo.date() - timedelta(days=2) <= day <= hi.date()):
             continue
-        prev, cur = None, None
+        boundary = 6 * 60 if day >= datetime(2026, 10, 14).date() else 4 * 60
+        prev = None
         for block in re.split(r"\n(?=## \d\d:\d\d)", open(f, encoding="utf-8").read()):
             m = re.match(r"## (\d\d):(\d\d) *(\S*)\n(.*)", block, re.S)
             if not m:
                 continue
             hm = int(m.group(1)) * 60 + int(m.group(2))
-            if prev is not None and hm < prev:
+            if (prev is None and hm < boundary) or (prev is not None and hm < prev):
                 day += timedelta(days=1)
             prev = hm
             t = datetime(day.year, day.month, day.day, hm // 60, hm % 60, tzinfo=JST)
+            fm = re.search(r"<!-- (\d{4}-\d\d-\d\d)_(\d\d)(\d\d)\d\d\.m4a -->", m.group(4))
+            if fm:   # 音声はファイル名の日時が正確
+                t = datetime.fromisoformat(f"{fm.group(1)}T{fm.group(2)}:{fm.group(3)}:00+09:00")
             text = re.sub(r"<!--.*?-->", "", m.group(4), flags=re.S)
             text = re.sub(r"\s+", " ", text).strip()
             if lo <= t <= hi and text:
