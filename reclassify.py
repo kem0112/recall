@@ -10,9 +10,12 @@ Discord の返信は書き換わらない（結果はここに表示される）
 import re
 import sys
 from datetime import date, datetime, timedelta
+from difflib import SequenceMatcher
 
 import classify as cl
 from nc import RAW_DIR, JST, DAY_START_HOUR, get_text
+
+DONE_RE = re.compile(r"^- \[x\] (.+?)(?: 📅| #| （\[\[|$)")
 
 ENTRY_RE = re.compile(r"^## (\d{2}):(\d{2})[^\n]*\n<!-- (.+?) -->\n(.*?)(?=\n## |\Z)", re.S | re.M)
 
@@ -28,15 +31,45 @@ def entries(day):
     return out
 
 
+def done_titles(entry_id):
+    """消す前に、その記録から出た行のうち完了（- [x]）にしてあるものの見出しを集める。"""
+    token = cl.entry_token(entry_id)
+    paths = list(cl.TYPE_FILES.values()) + cl.LEGACY_TASK_FILES + cl.LEGACY_WISH_FILES
+    titles = []
+    for p in paths:
+        for line in (get_text(p) or "").splitlines():
+            m = DONE_RE.match(line)
+            if token in line and m:
+                titles.append(m.group(1).strip())
+    return titles
+
+
+def carry_done(items, old_done):
+    """新しい項目のうち、以前完了にしていたものと見出しが近いものを完了のまま引き継ぐ。"""
+    left = list(old_done)
+    for it in items:
+        if it["type"] not in cl.CHECK_TYPES or not left:
+            continue
+        best = max(left, key=lambda t: SequenceMatcher(None, t, it["title"]).ratio())
+        if SequenceMatcher(None, best, it["title"]).ratio() >= 0.5:
+            it["done"] = True
+            left.remove(best)
+    return left
+
+
 def redo(day, entry_id, dt, text):
+    old_done = done_titles(entry_id)
     removed = cl.unrecord(entry_id)
     if text in ("（音声なし）", "（内容なし）"):
         print(f"- {entry_id}: 中身なし（古い行 {removed} 行を消しただけ）")
         return
     items = cl.classify(text, dt)
+    lost = carry_done(items, old_done)
     cl.record(items, dt, day, entry_id)
     print(f"■ {dt:%m/%d %H:%M} {entry_id}（古い行 {removed} 行 → 新しく {sum(i['type'] != 'その他' for i in items)} 行）")
     print(cl.describe(items))
+    for t in lost:
+        print(f"  ⚠️ 完了済みだった「{t}」は引き継ぎ先なし（タスク以外になったか、見出しが変わった）")
 
 
 def main():

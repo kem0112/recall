@@ -12,20 +12,21 @@
 /ob/Recall/raw/YYYY-MM-DD.md   その日の全記録（唯一の元データ。🎙️ 音声 / 💬 文字）
           │
           ├ すぐに: Codex で仕分け → 種類のノートに1行追記 → #recall に結果（①②とも）
-          │     /ob/Recall/短期タスク.md /長期タスク.md /開発タスク.md /心を動かされたもの.md /所感.md （その他は raw と日記のみ。1件から複数の項目を取り出す）
+          │     /ob/Recall/短期タスク.md /開発タスク.md /アイデア.md /心を動かされたもの.md /人間関係.md /所感.md （その他は raw と日記のみ。1件から複数の項目を取り出す）
           │
           └ 毎朝6:15: summarize.py → /ob/Recall/日記/YYYY-MM-DD.md（要約・できごと・気づき・TODO・清書）
 ```
 
 - 日付の区切りは朝6時（`nc.py` の `DAY_START_HOUR`。concierge の `nc.py` も同じ値にそろえる）。
-- 種類は4つ固定、タグは AI が自由に付ける。運用しながらタグを見直す。raw が元データなので、後から全件仕分け直せる。
+- 種類は7つ固定（短期タスク・開発タスク・アイデア・心を動かされたもの・人間関係・所感・その他）。2026-10-14 に長期タスク→アイデア、所感から人間関係を分離。
+- タグは `prompts/tags.txt` の一覧からだけ選ばせる（一覧外は捨てる）。一覧を編集して push すれば次の仕分けから反映。raw が元データなので、後から全件仕分け直せる（やり直しでも完了 `- [x]` は見出しが近ければ引き継ぐ）。
 - Nextcloud への読み書きはすべて WebDAV。同じ md への同時書き込みは `/tmp/recall-ob.lock` で直列化。
 - Codex は読み取り専用・空フォルダで動かし、資格情報もファイルも渡さない。返ってきたテキストを Python が書く。
 - 照明・鍵の bot（home-control）とは別アプリ・別プロセス。Recall が落ちても家の制御には影響しない。
 
 ## タスクの確認
 
-- `!tasks` と投稿すると、短期・長期・開発タスク（と以前の タスク.md、預かりタスク.md）の「今日・期限切れ・明日」を出す。`!` で始まる投稿は記録されない
+- `!tasks` と投稿すると、短期・開発タスク（と以前の タスク.md、預かりタスク.md）の「今日・期限切れ・明日」を出す。`!` で始まる投稿は記録されない
 - 拾うのは「未完了 `- [ ]`」かつ「期日 `📅 YYYY-MM-DD`」の行だけ（`digest.py`、Codex は使わない）。
   Obsidian で完了 `- [x]` にすれば出なくなる。手で書き足したタスクも同じ書き方なら拾う
 - 毎朝のモーニングブリーフは **Concierge**（別リポジトリ・別 bot, #concierge）が Recall の記録を読んで作る
@@ -51,7 +52,7 @@
 | nc.py | WebDAV・raw 追記・ロックなどの共通部品 |
 | ai.py | Codex CLI の呼び出し |
 | transcribe.py | Whisper（bot からは別プロセスで呼ぶ。モデルを常駐させないため） |
-| prompts/ | classify.md（仕分け）, summary.md（日記）, glossary.txt（用語集） |
+| prompts/ | classify.md（仕分け）, tags.txt（タグ一覧）, summary.md（日記）, glossary.txt（用語集） |
 | run*.sh | cron / systemd からの起動（env と nvm を読み込む） |
 | deploy/ | post-receive フック、systemd ユニット |
 | crontab.txt / env.example | pk-206 側の設定の控え |
@@ -72,7 +73,6 @@ GitHub（控え）へは `git push github main`。
 
 ## 今後
 
-- タグの見直し（1週間運用後）
 - 画像・URL の中身を読む（今はファイル名・URL文字列のみ記録）
 - 仕分けの訂正（Discord で返信して種類を変える）
 - 共有シート経由の音声は送信時刻がファイル名になる → m4a 埋め込みの録音日時を優先

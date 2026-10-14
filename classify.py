@@ -1,7 +1,8 @@
 """1件の記録を Codex で項目に分け、種類ごとのノートに1行ずつ追記する。
 
 長い音声メモには複数の話題（タスク・感想・気づき…）が混ざるので、1件から0〜数個の項目を取り出す。
-種類は6つ固定（短期タスク / 長期タスク / 開発タスク / 心を動かされたもの / 所感 / その他）。タグはAIが自由に付ける。
+種類は7つ固定（短期タスク / 開発タスク / アイデア / 心を動かされたもの / 人間関係 / 所感 / その他）。
+タグは prompts/tags.txt の一覧からだけ選ぶ（一覧に無いタグは捨てる）。
 元データは raw にあるので、後から全件やり直せる。1件から出た行には同じ目印（%%id%%）が付き、取り消しでまとめて消える。
 """
 import json
@@ -11,14 +12,16 @@ from datetime import date
 from ai import run_codex, load_prompt, glossary
 from nc import OB_ROOT, append_line, remove_lines_containing
 
-TYPES = ["短期タスク", "長期タスク", "開発タスク", "心を動かされたもの", "所感", "その他"]
-TASK_TYPES = ("短期タスク", "長期タスク", "開発タスク")   # チェックボックス（- [ ]）で書く種類
+TYPES = ["短期タスク", "開発タスク", "アイデア", "心を動かされたもの", "人間関係", "所感", "その他"]
+TASK_TYPES = ("短期タスク", "開発タスク")              # 期日（📅）を付ける種類
+CHECK_TYPES = ("短期タスク", "開発タスク", "アイデア")   # チェックボックス（- [ ]）で書く種類
 TYPE_FILES = {t: f"{OB_ROOT}/{t}.md" for t in TYPES if t != "その他"}
 # 以前の分類のノート。!tasks・ブリーフは引き続き読む（中の行はそのまま使える）
 LEGACY_TASK_FILES = [f"{OB_ROOT}/タスク.md"]
-LEGACY_WISH_FILES = [f"{OB_ROOT}/やりたいこと.md"]
-TYPE_ICON = {"短期タスク": "✅", "長期タスク": "🌱", "開発タスク": "🛠️", "心を動かされたもの": "✨",
-             "所感": "💭", "その他": "📓"}
+LEGACY_WISH_FILES = [f"{OB_ROOT}/やりたいこと.md", f"{OB_ROOT}/長期タスク.md"]   # 長期タスク → アイデア（2026-10-14）
+TYPE_ICON = {"短期タスク": "✅", "開発タスク": "🛠️", "アイデア": "💡", "心を動かされたもの": "✨",
+             "人間関係": "🤝", "所感": "💭", "その他": "📓"}
+MAX_TAGS = 3
 WEEKDAYS = "月火水木金土日"
 MAX_ITEMS = 8
 
@@ -37,7 +40,29 @@ def parse_due(value):
         return None
 
 
-def _clean_item(data):
+def tag_list():
+    """prompts/tags.txt の一覧（# 以降は説明、## は見出し）。ファイルが無ければ None（＝自由）。"""
+    try:
+        text = load_prompt("tags.txt")
+    except FileNotFoundError:
+        return None
+    tags = []
+    for line in text.splitlines():
+        name = line.split("#", 1)[0].strip()
+        if name and name not in tags:
+            tags.append(name)
+    return tags
+
+
+def tag_prompt():
+    try:
+        lines = load_prompt("tags.txt").splitlines()
+    except FileNotFoundError:
+        return "（一覧なし。自由に付けてよい）"
+    return "\n".join(l for l in lines if l.strip() and not l.startswith("# "))
+
+
+def _clean_item(data, allowed=None):
     if not isinstance(data, dict):
         return None
     typ = data.get("type") if data.get("type") in TYPES else "その他"
@@ -50,9 +75,9 @@ def _clean_item(data):
     for t in raw_tags:
         t = re.sub(r"\s+", "_", str(t).strip().lstrip("#"))
         t = re.sub(r"[#\[\]()]", "", t)
-        if t and not t.isdigit() and t not in tags:
+        if t and not t.isdigit() and t not in tags and (allowed is None or t in allowed):
             tags.append(t)
-    return {"type": typ, "title": title, "summary": summary, "tags": tags[:5],
+    return {"type": typ, "title": title, "summary": summary, "tags": tags[:MAX_TAGS],
             "due": parse_due(data.get("due")) if typ in TASK_TYPES else None}
 
 
@@ -68,7 +93,8 @@ def parse_result(out, text):
     raw_items = data.get("items") if isinstance(data, dict) else None
     if isinstance(data, dict) and raw_items is None and "type" in data:
         raw_items = [data]   # 1件だけの形で返ってきたとき
-    items = [it for it in (_clean_item(d) for d in (raw_items or [])) if it][:MAX_ITEMS]
+    allowed = tag_list()
+    items = [it for it in (_clean_item(d, allowed) for d in (raw_items or [])) if it][:MAX_ITEMS]
     if not items:
         first_line = text.strip().splitlines()[0] if text.strip() else "（無題）"
         items = [{"type": "その他", "title": first_line[:40], "summary": "", "tags": [], "due": None}]
@@ -79,6 +105,7 @@ def classify(text, dt):
     prompt = (load_prompt("classify.md")
               .replace("{{NOW}}", now_label(dt))
               .replace("{{GLOSSARY}}", glossary())
+              .replace("{{TAGS}}", tag_prompt())
               .replace("{{TEXT}}", text))
     return parse_result(run_codex(prompt, timeout=300, profile="light", task="recall_classify"), text)
 
@@ -91,8 +118,8 @@ def entry_token(entry_id):
 def format_line(result, dt, day, entry_id):
     link = f"[[Recall/raw/{day.isoformat()}|{dt:%m/%d %H:%M}]]"
     tags = " ".join("#" + t for t in result["tags"])
-    if result["type"] in TASK_TYPES:
-        body = f"- [ ] {result['title']}"
+    if result["type"] in CHECK_TYPES:
+        body = f"- [{'x' if result.get('done') else ' '}] {result['title']}"
         if result.get("due"):
             # Obsidian の Tasks プラグインの期日の書き方（プラグインが無くてもただの文字として読める）
             body += f" 📅 {result['due']}"
@@ -119,11 +146,12 @@ def unrecord(entry_id):
 
 def describe_one(it):
     tags = " ".join("#" + t for t in it["tags"])
+    done = " （完了）" if it.get("done") else ""
     due = ""
     if it.get("due"):
         d = date.fromisoformat(it["due"])
         due = f" 📅 {d:%m/%d}（{WEEKDAYS[d.weekday()]}）"
-    return f"{TYPE_ICON[it['type']]} **{it['type']}**：{it['title']}{due} {tags}".strip()
+    return f"{TYPE_ICON[it['type']]} **{it['type']}**：{it['title']}{due}{done} {tags}".strip()
 
 
 def describe(items):
