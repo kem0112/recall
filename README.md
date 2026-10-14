@@ -39,6 +39,17 @@
 消えるもの: raw の該当部分・種類ノートの行・保存した音声（Nextcloud のゴミ箱へ）・bot の返信。
 種類ノートの各行の末尾にある `%%discord:…%%` は、この削除のための目印（Obsidian では表示されない）。
 
+## スクリーンタイムの収集（Mac 側, `mac/`）
+
+睡眠や1日の時間の使い方を後から判断する材料。Mac で launchd が1時間おき（と Mac が起きた時）に動かす。
+
+- 元データ: Biome の `App.InFocus`。iPhone の分は iCloud 経由で Mac に同期されてくる（`remote/<端末ID>`、届くのは充電中などにまとめてで、1日くらい遅れる）。Mac 自身の分は `local`
+- 項目の意味（実データで確認）: `3`=開いた1/閉じた0, `4`=時刻, `6`=アプリID, `1`=切り替えの理由（iPhone）。`com.apple.loginwindow` は Mac のロック中
+- 前回からの新しい分だけを `~/Library/Application Support/recall-screentime/out/YYYY-MM-DD.jsonl`（JST の暦日）に足し、pk-206 の `~/recall-data/screentime/` へ rsync。送れなかった分は次の回にまとめて送る
+- `_arrivals.jsonl` に「いつ・どの端末の・何時までの記録が届いたか」を残す（同期の遅れを見る）
+- 入れ方: Mac で `mac/install.sh` を1回 → 表示された Python 本体にフルディスクアクセスを与える
+- 確認: `python3 mac/collect_screentime.py --dump`（送らない・状態も進めない） / ログ `~/Library/Logs/recall-screentime.log`
+
 ## ファイル
 
 | ファイル | 役割 |
