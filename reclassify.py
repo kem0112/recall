@@ -34,7 +34,7 @@ def entries(day):
 def done_titles(entry_id):
     """消す前に、その記録から出た行のうち完了（- [x]）にしてあるものの見出しを集める。"""
     token = cl.entry_token(entry_id)
-    paths = list(cl.TYPE_FILES.values()) + cl.LEGACY_TASK_FILES + cl.LEGACY_WISH_FILES
+    paths = list(cl.TYPE_FILES.values())
     titles = []
     for p in paths:
         for line in (get_text(p) or "").splitlines():

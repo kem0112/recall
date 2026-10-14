@@ -1,6 +1,6 @@
 """タスクのノートから、期日が近いものを機械的に拾う（Codex は使わない）。
 
-短期タスク.md・開発タスク.md（と以前の タスク.md）を見る。メール由来のタスク（預かりタスク）は 2026-10-14 に廃止。
+短期タスク.md・開発タスク.md を見る。メール由来のタスク（預かりタスク）は 2026-10-14 に廃止。
 拾う条件は2つだけ:
   - 未完了の行（`- [ ]` で始まる。完了は `- [x]`）
   - 期日 `📅 YYYY-MM-DD` が付いている
@@ -9,7 +9,7 @@ bot が書く行はこの形に決まっているし、Obsidian で手で書き�
 import re
 from datetime import date, timedelta
 
-from classify import TYPE_FILES, TASK_TYPES, LEGACY_TASK_FILES, WEEKDAYS
+from classify import TYPE_FILES, TASK_TYPES, WEEKDAYS
 from nc import get_text
 
 TASK_RE = re.compile(r"^\s*- \[ \] (.*)$")
@@ -45,7 +45,7 @@ def open_tasks_with_due(content):
 def build_digest(today, content=None, include_empty=False):
     if content is None:
         # 自分のタスク（Recall）と、Concierge がメールから預かったタスクの両方
-        paths = [TYPE_FILES[t] for t in TASK_TYPES] + LEGACY_TASK_FILES
+        paths = [TYPE_FILES[t] for t in TASK_TYPES]
         content = "\n".join(get_text(p) or "" for p in paths)
     tasks = open_tasks_with_due(content)
     overdue = [(d, t) for d, t in tasks if d < today]

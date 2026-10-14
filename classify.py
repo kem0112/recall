@@ -16,9 +16,6 @@ TYPES = ["短期タスク", "開発タスク", "アイデア", "心を動かさ�
 TASK_TYPES = ("短期タスク", "開発タスク")              # 期日（📅）を付ける種類
 CHECK_TYPES = ("短期タスク", "開発タスク", "アイデア")   # チェックボックス（- [ ]）で書く種類
 TYPE_FILES = {t: f"{OB_ROOT}/{t}.md" for t in TYPES if t != "その他"}
-# 以前の分類のノート。!tasks・ブリーフは引き続き読む（中の行はそのまま使える）
-LEGACY_TASK_FILES = [f"{OB_ROOT}/タスク.md"]
-LEGACY_WISH_FILES = [f"{OB_ROOT}/やりたいこと.md", f"{OB_ROOT}/長期タスク.md"]   # 長期タスク → アイデア（2026-10-14）
 TYPE_ICON = {"短期タスク": "✅", "開発タスク": "🛠️", "アイデア": "💡", "心を動かされたもの": "✨",
              "人間関係": "🤝", "体調": "🩺", "所感": "💭", "その他": "📓"}
 MAX_TAGS = 3
@@ -139,8 +136,8 @@ def record(items, dt, day, entry_id):
 
 
 def unrecord(entry_id):
-    """種類のノートから、その記録から出た行を全部消す（以前の分類のノートも含む）。"""
-    paths = list(TYPE_FILES.values()) + LEGACY_TASK_FILES + LEGACY_WISH_FILES
+    """種類のノートから、その記録から出た行を全部消す。"""
+    paths = list(TYPE_FILES.values())
     return sum(remove_lines_containing(p, entry_token(entry_id)) for p in paths)
 
 
