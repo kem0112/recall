@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """スクリーンタイムの収集係（Mac で launchd が1時間おきに動かす）。
 
-iPhone から iCloud で同期されてきたアプリ使用記録と、この Mac 自身の分（Biome の App.InFocus）を読み、
+iPhone から iCloud で同期されてきたアプリ使用記録と、この Mac 自身の分（Biome の App.InFocus）、
+Mac の画面が点いていた区間（knowledgeC の /display/isBacklit）を読み、
 前回からの新しい分だけを日付ごとの JSONL にして、pk-206 の ~/recall-data/screentime/ へ rsync で送る。
 
 - 読むだけ。Biome は書き換えない。中身の解釈（どの項目が何か）は後で決めるので、取れる項目は全部残す
@@ -25,6 +26,7 @@ STREAM = "App.InFocus"
 WORK = f"{HOME}/Library/Application Support/recall-screentime"
 OUT = f"{WORK}/out"
 STATE = f"{WORK}/state.json"
+KNOWLEDGE = f"{HOME}/Library/Application Support/Knowledge/knowledgeC.db"
 REMOTE = os.environ.get("RECALL_ST_REMOTE", "pk-206:recall-data/screentime/")
 JST = dt.timezone(dt.timedelta(hours=9))
 APPLE = 978307200
@@ -185,6 +187,25 @@ def log(msg):
     print(f"{dt.datetime.now(JST):%Y-%m-%d %H:%M:%S} {msg}", flush=True)
 
 
+def backlit(state):
+    """Mac の画面の点灯・消灯の区間（前回より新しい行だけ）。App.InFocus はアプリが前面のまま放置しても続くので、
+    実際に使っていたかはこれと重ねて判断する。{"kind": "backlit", "on": true/false, "t": 開始, "end": 終了}"""
+    try:
+        con = sqlite3.connect(f"file:{KNOWLEDGE}?mode=ro", uri=True)
+        rows = con.execute("SELECT Z_PK, ZSTARTDATE, ZENDDATE, ZVALUEINTEGER FROM ZOBJECT "
+                           "WHERE ZSTREAMNAME = '/display/isBacklit' AND Z_PK > ? ORDER BY Z_PK",
+                           (state.get("_backlit_pk", 0),)).fetchall()
+    except sqlite3.Error as e:
+        log(f"knowledgeC を読めない: {e}")
+        return []
+    out = []
+    for pk, s, e, v in rows:
+        state["_backlit_pk"] = max(state.get("_backlit_pk", 0), pk)
+        if s and e:
+            out.append({"device": "mac", "kind": "backlit", "on": bool(v), "t": iso(s), "end": iso(e)})
+    return out
+
+
 # ---------- 本体 ----------
 
 def collect(dump=False):
@@ -221,6 +242,9 @@ def collect(dump=False):
         if n_new:
             arrivals.append({"run_at": dt.datetime.now(JST).isoformat(timespec="seconds"),
                              "device": device, "new": n_new, "latest": latest})
+    if not dump:
+        for ev in backlit(state):
+            new_by_day.setdefault(ev["t"][:10], []).append(ev)
 
     if dump:
         evs = sorted((e for v in new_by_day.values() for e in v), key=lambda e: e["t"])

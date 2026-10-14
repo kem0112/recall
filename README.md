@@ -39,11 +39,23 @@
 消えるもの: raw の該当部分・種類ノートの行・保存した音声（Nextcloud のゴミ箱へ）・bot の返信。
 種類ノートの各行の末尾にある `%%discord:…%%` は、この削除のための目印（Obsidian では表示されない）。
 
+## 睡眠（`sleep.py`, cron で1時間おき）
+
+「1日」の枠を使わず、連続した記録から寝ていた区間を見つけて `/ob/Recall/睡眠.md` に1区間1行で書く。
+
+- 材料: スクリーンタイム（`~/recall-data/screentime`、Mac の画面点灯中だけを使用とみなす）・Google カレンダー（`RECALL_ICAL_URLS`。数字だけの予定はバイトのシフト）・raw の言葉
+- iPhone の記録が新しく届いたときだけ動く（届くのは1日くらい遅れる）。直近5日を見直す。最初の12時間に始まる区間は端が切れて不安定なので前回の結果を残す
+- 候補（両端末が1時間以上使われていない空白）は Python が拾い、Codex（main）が睡眠か・入眠/起床の時刻を決める（`prompts/sleep.md`）。言葉の中の予定（「4時間しか寝られへん」）より実際の使用を優先
+- 違っていたら Obsidian で時刻を直し、行末に `#手直し` → 以後その行は書き換えず、その区間は確定として Codex にも渡す
+- 日記（summarize.py）とは別の呼び出し（材料・タイミング・出力の形が違うため）
+- 手動: `run_sleep.sh --dry-run`（表示だけ） / `--force`（新着がなくても判定）
+- 試験・比較用: `tools/sleep_trial.py`（Mac で実行。`--no-words --no-cal` で材料を減らして比べる）
+
 ## スクリーンタイムの収集（Mac 側, `mac/`）
 
 睡眠や1日の時間の使い方を後から判断する材料。Mac で launchd が1時間おき（と Mac が起きた時）に動かす。
 
-- 元データ: Biome の `App.InFocus`。iPhone の分は iCloud 経由で Mac に同期されてくる（`remote/<端末ID>`、届くのは充電中などにまとめてで、1日くらい遅れる）。Mac 自身の分は `local`
+- 元データ: Biome の `App.InFocus` と、knowledgeC の `/display/isBacklit`（Mac の画面の点灯。アプリが前面のまま放置された時間を除くため）。iPhone の分は iCloud 経由で Mac に同期されてくる（`remote/<端末ID>`、届くのは充電中などにまとめてで、1日くらい遅れる）。Mac 自身の分は `local`
 - 項目の意味（実データで確認）: `3`=開いた1/閉じた0, `4`=時刻, `6`=アプリID, `1`=切り替えの理由（iPhone）。`com.apple.loginwindow` は Mac のロック中
 - 前回からの新しい分だけを `~/Library/Application Support/recall-screentime/out/YYYY-MM-DD.jsonl`（JST の暦日）に足し、pk-206 の `~/recall-data/screentime/` へ rsync。送れなかった分は次の回にまとめて送る
 - `_arrivals.jsonl` に「いつ・どの端末の・何時までの記録が届いたか」を残す（同期の遅れを見る）
@@ -59,6 +71,7 @@
 | summarize.py | 日次の日記（`--date YYYY-MM-DD` で作り直し） |
 | classify.py | 1件の仕分けと、種類ノートへの追記 |
 | reclassify.py | raw の記録を今の分類でやり直す（`run_reclassify.sh 日付 [ID|--all]`） |
+| sleep.py | 睡眠の判定（スクリーンタイム・カレンダー・言葉 → 睡眠.md） |
 | digest.py | タスクのノートから期日の近いタスクを拾う（`!tasks`） |
 | nc.py | WebDAV・raw 追記・ロックなどの共通部品 |
 | ai.py | Codex CLI の呼び出し |
